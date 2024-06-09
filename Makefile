@@ -3,7 +3,8 @@ GO_MOD_TIDY = go mod tidy
 GO_BUILD = go build
 TARGET = arm64
 PACKAGE = main
-TYPE = event
+TYPE1 = trace_event
+TYPE2 = trace_config
 BPF_FILE = binder_transaction.byte.c
 HEADERS = ./headers
 BPF_OUTPUT = bpf
@@ -12,7 +13,7 @@ BINARY_NAME = btrace
 all: bpf tidy build
 
 bpf:
-	$(GO_RUN) -go-package $(PACKAGE) --target=$(TARGET) -type $(TYPE) $(BPF_OUTPUT) $(BPF_FILE) -- -I$(HEADERS)
+	$(GO_RUN) -go-package $(PACKAGE) --target=$(TARGET) -type $(TYPE1) -type $(TYPE2) $(BPF_OUTPUT) $(BPF_FILE) -- -I$(HEADERS)
 
 tidy:
 	$(GO_MOD_TIDY)
