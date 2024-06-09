@@ -24,6 +24,7 @@ import java.io.InputStreamReader;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.lang.reflect.Parameter;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
@@ -46,10 +47,35 @@ public class MyService extends Service {
             Method method = bClass.getMethod("getMethodName", Class.class, int.class);
             Object instance = bClass.newInstance();
             for (int i = 1; i <= fields.length; i++) {
+                String fullMethodName = null;
                 String transactionName = (String) method.invoke(instance,aClass,i);
                 if(transactionName != null){
-                    //Log.d("null-luo", transactionName);
-                    methodNames.put(i, transactionName);
+                    for(Method m : aClass.getMethods()) {
+                        if (m.getName().equals(transactionName)) {
+                            StringBuilder stringBuilder = new StringBuilder();
+                            stringBuilder.append(m.getReturnType().getName());
+                            stringBuilder.append(" ");
+                            stringBuilder.append(transactionName);
+                            stringBuilder.append("(");
+
+                            Class<?>[] paramTypes = m.getParameterTypes();
+                            for (int j = 0; j < paramTypes.length; j++) {
+                                stringBuilder.append(paramTypes[j].getName());
+                                if (j < paramTypes.length - 1) {
+                                    stringBuilder.append(", ");
+                                }
+                            }
+
+                            stringBuilder.append(")");
+                            fullMethodName = stringBuilder.toString();
+                            methodNames.put(i, fullMethodName);
+                            break;
+                        }
+                    }
+                    if (fullMethodName == null) {
+                        Log.d("null-luo", transactionName);
+                        methodNames.put(i, transactionName);
+                    }
                 }
             }
         } catch (ClassNotFoundException e) {
@@ -153,6 +179,8 @@ public class MyService extends Service {
             FileOutputStream fos = null;
             fos = openFileOutput("methods.json", Context.MODE_PRIVATE);
             fos.write(jsonString.getBytes());
+
+            Log.v("null-luo", "MyService Done");
 
         } catch (IOException | JSONException e) {
             throw new RuntimeException(e);
