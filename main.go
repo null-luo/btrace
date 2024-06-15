@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"fmt"
 	"flag"
+	"encoding/json"
 
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
@@ -21,29 +22,60 @@ import (
 const ChunkSize = 0x400
 const MaxChunks = 16
 
-type Config struct {
-	PackageName string
-	Args bool
-	FileName string
+type Filter struct {
+	Interface string `json:"interface"`
+	Method    string `json:"method"`
 }
 
-func parseFlags() Config {
-	var config Config
+type Config struct {
+	PackageName  string          `json:"package_name"`
+	Args         bool            `json:"args"`
+	FileName     string          `json:"file_name"`
+	CustomMethods MethodMappings `json:"customMethods"`
+	Filters      []Filter        `json:"filters"`
+}
 
-	var packageName string
-	flag.StringVar(&packageName, "p", "", "specify the package name to trace")
-	var args bool
-	flag.BoolVar(&args, "a", false, "whether to trace arguments")
-	var fileName string
-	flag.StringVar(&fileName, "f", "", "specify the log output file")
+func parseFlags() (Config, string) {
+	var config Config
+	var configFile string
+
+	flag.StringVar(&configFile, "c", "", "specify the configuration file")
+	flag.StringVar(&config.PackageName, "p", "", "specify the package name to trace")
+	flag.BoolVar(&config.Args, "a", false, "whether to trace arguments")
+	flag.StringVar(&config.FileName, "f", "", "specify the log output file")
 
 	flag.Parse()
 
-	config.PackageName = packageName
-	config.Args = args
-	config.FileName = fileName
+	return config, configFile
+}
 
-	return config
+func parseConfigFile(filename string) (Config, error) {
+	var config Config
+	file, err := os.Open(filename)
+	if err != nil {
+		return config, err
+	}
+	defer file.Close()
+
+	decoder := json.NewDecoder(file)
+	if err := decoder.Decode(&config); err != nil {
+		return config, err
+	}
+
+	return config, nil
+}
+
+func mergeConfigs(flagConfig, fileConfig Config) Config {
+	if flagConfig.PackageName != "" {
+		fileConfig.PackageName = flagConfig.PackageName
+	}
+	if flagConfig.Args {
+		fileConfig.Args = flagConfig.Args
+	}
+	if flagConfig.FileName != "" {
+		fileConfig.FileName = flagConfig.FileName
+	}
+	return fileConfig
 }
 
 func mergeChunks(chunks [][]byte) []byte {
@@ -56,9 +88,32 @@ func mergeChunks(chunks [][]byte) []byte {
     return mergedData
 }
 
+func shouldFilter(interfaceToken, methodName string, filters []Filter) bool {
+	for _, filter := range filters {
+		if filter.Interface == interfaceToken && (filter.Method == "" || filter.Method == methodName) {
+			return true
+		}
+	}
+	return false
+}
+
 func main() {
 
-	conf := parseFlags()
+	// 解析命令行参数
+	flagConfig, configFile := parseFlags()
+
+	// 解析配置文件
+	var fileConfig Config
+	if configFile != "" {
+		var err error
+		fileConfig, err = parseConfigFile(configFile)
+		if err != nil {
+			log.Fatalf("读取配置文件失败: %v", err)
+		}
+	}
+	
+	// 合并命令行参数和配置文件参数
+	conf := mergeConfigs(flagConfig, fileConfig)
 
 	var logger *log.Logger
 	if conf.FileName != "" {
@@ -81,9 +136,13 @@ func main() {
 	stopper := make(chan os.Signal, 1)
 	signal.Notify(stopper, os.Interrupt, syscall.SIGTERM)
 
+	// Load default method mappings from embedded JSON
 	if err := LoadMethodMappings(methodsJSON); err != nil {
 		logger.Fatal(err)
 	}
+
+	// Override default method mappings with custom methods from config file
+	OverrideMethodMappings(conf.CustomMethods)
 
 	if err := LoadPackageMappings(); err != nil {
 		logger.Fatal(err)
@@ -198,6 +257,10 @@ func main() {
 			methodName, err := GetMethodName(interfaceToken, int(event.Code))
 			if err != nil {
 				methodName = fmt.Sprintf("%d", event.Code)
+			}
+
+			if shouldFilter(interfaceToken, methodName, conf.Filters) {
+				continue
 			}
 
 			packageName, err := GetPackageNameByUid(int(event.Uid))

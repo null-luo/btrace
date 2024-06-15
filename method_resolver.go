@@ -36,6 +36,21 @@ func LoadMethodMappings(jsonData []byte) error {
 	return nil
 }
 
+// OverrideMethodMappings 用于覆盖默认方法映射
+func OverrideMethodMappings(customMethods MethodMappings) {
+	for interfaceName, methods := range customMethods {
+		if _, ok := interfaceMethods[interfaceName]; !ok {
+			interfaceMethods[interfaceName] = make(map[int]string)
+		}
+		for code, methodName := range methods {
+			var codeInt int
+			if _, err := fmt.Sscan(code, &codeInt); err == nil {
+				interfaceMethods[interfaceName][codeInt] = methodName
+			}
+		}
+	}
+}
+
 func GetMethodName(interfaceName string, code int) (string, error) {
 	if methods, ok := interfaceMethods[interfaceName]; ok {
 		if methodName, ok := methods[code]; ok {
@@ -45,4 +60,3 @@ func GetMethodName(interfaceName string, code int) (string, error) {
 	}
 	return "", fmt.Errorf("interface %s not found", interfaceName)
 }
-

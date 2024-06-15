@@ -1,0 +1,26 @@
+{
+    "customMethods": {
+        "android.content.pm.IBackgroundInstallControlService": {
+            "1": "android.content.pm.ParceledListSlice getBackgroundInstalledPackages(long, int)"
+          },
+          "android.net.nsd.INsdManager": {
+            "1": "android.net.connectivity.android.net.nsd.INsdServiceConnector connect(android.net.connectivity.android.net.nsd.INsdManagerCallback, boolean)"
+          }
+    },
+
+    "filters": [
+        {
+            "interface": "com.google.hardware.pixel.display.IDisplay",
+            "method": ""
+        },
+        {
+            "interface": "android.gui.IDisplayEventConnection",
+            "method": ""
+        },
+        {
+            "interface": "android.os.IMessenger",
+            "method": ""
+        }
+    ]
+
+}
